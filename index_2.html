@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plate Cost — Recipe Costing</title>
+<meta name="description" content="Cost every recipe, see food cost % per plate, and get a suggested menu price.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700;9..144,800&family=Inter:wght@400;500;700&family=Petit+Formal+Script&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Daniela Herrera brand */
+  --herb:#7A1F3D; --basil:#5E7D5A; --leaf:#EFE1D6; --paper:#F7F1EC; --card:#FFFDFB;
+  --ink:#2B1B22; --muted:#7C6169; --line:rgba(43,27,34,.14); --tomato:#7A1F3D; --tomato-bg:#F3DCE3;
+  --mustard:#C79A4B; --input:#FBF4EE; --ok-bg:#E6EEE2; --costbar:#9C7F87;
+  --display:"Fraunces",Georgia,serif;
+  --body:"Inter",system-ui,sans-serif; --script:"Petit Formal Script",cursive;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --herb:#D45A82; --basil:#9CC08F; --leaf:#2E1620; --paper:#241119; --card:#331A25;
+    --ink:#F7EAEE; --muted:#D6B3BE; --line:rgba(247,234,238,.14); --tomato:#D45A82; --tomato-bg:#4A1F30;
+    --mustard:#E8B65E; --input:#2E1620; --ok-bg:#25301F; --costbar:#8F6672; color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font:16px/1.5 var(--body);font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--display);margin:0;line-height:1.1}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--mustard);outline-offset:2px;border-radius:6px}
+
+/* Top bar */
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px 24px;padding:18px 24px;border-bottom:1px solid var(--line);background:var(--card)}
+.brand{display:flex;align-items:baseline;gap:10px;margin-right:auto}
+.brand h1{font-size:28px;font-weight:700;color:var(--ink);letter-spacing:-.02em}
+.brand span{font-family:var(--script);color:var(--herb);font-size:17px}
+footer a{color:var(--herb)}
+.target{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted)}
+.target input{width:64px;text-align:right}
+nav.tabs{display:flex;gap:4px;padding:0 24px;background:var(--card);border-bottom:1px solid var(--line);overflow-x:auto}
+nav.tabs button{border:0;background:none;padding:12px 14px;font-weight:700;color:var(--muted);border-bottom:3px solid transparent;cursor:pointer;white-space:nowrap}
+nav.tabs button[aria-selected="true"]{color:var(--herb);border-bottom-color:var(--herb)}
+main{max-width:1180px;margin:0 auto;padding:24px}
+.view{display:none}.view.on{display:block}
+.head{display:flex;flex-wrap:wrap;align-items:end;gap:12px;justify-content:space-between;margin-bottom:16px}
+.head h2{font-size:30px;font-weight:700;letter-spacing:-.02em}
+.head p{margin:4px 0 0;color:var(--muted);max-width:60ch}
+.btn{border:1px solid var(--herb);background:var(--herb);color:#FFFDFB;padding:9px 16px;border-radius:999px;font-weight:700;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--herb)}
+.btn.small{padding:5px 12px;font-size:14px}
+.icon{border:0;background:none;color:var(--muted);cursor:pointer;padding:6px 8px;border-radius:6px;font-size:18px;line-height:1}
+.icon:hover{color:var(--tomato);background:var(--tomato-bg)}
+
+/* Inputs */
+.in{background:var(--input);border:1px solid var(--line);border-radius:8px;padding:7px 9px;width:100%;min-width:0}
+.in:focus{border-color:var(--mustard)}
+select.in{padding-right:4px}
+.num{text-align:right}
+
+/* Tables */
+.tablewrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:14px}
+table{border-collapse:collapse;width:100%;min-width:720px}
+th{font-size:13px;text-align:left;color:var(--muted);font-weight:700;padding:10px;border-bottom:1px solid var(--line);vertical-align:bottom}
+td{padding:6px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+th.r,td.r{text-align:right}
+.calc{font-weight:700}
+.flag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:13px;font-weight:700;white-space:nowrap}
+.flag.bad{background:var(--tomato-bg);color:var(--tomato)}
+.flag.good{background:var(--ok-bg);color:var(--basil)}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+
+/* Menu board: the signature element is the plate split bar */
+.board{display:grid;gap:12px}
+.dish{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,2fr) 200px;gap:8px 24px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 20px;cursor:pointer;text-align:left;width:100%}
+.dish:hover{border-color:var(--basil)}
+.dish h3{font-size:20px;font-weight:700}
+.dish .cat{color:var(--muted);font-size:14px}
+.split{display:flex;height:34px;border-radius:8px;overflow:hidden;background:var(--leaf);position:relative}
+.split .cost{background:var(--costbar);color:var(--paper);display:flex;align-items:center;padding:0 10px;font-size:13px;font-weight:700;white-space:nowrap;min-width:0;transition:width .35s ease}
+.split.over .cost{background:var(--herb)}
+.split .profit{flex:1;display:flex;align-items:center;justify-content:flex-end;padding:0 10px;font-size:13px;font-weight:700;color:var(--herb)}
+.split .mark{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--mustard)}
+.dish .nums{text-align:right;font-size:14px;color:var(--muted);white-space:nowrap}
+.dish .nums b{display:block;font-family:var(--display);font-size:26px;color:var(--ink);line-height:1.1}
+.dish .nums b.over{color:var(--tomato)}
+.legend{display:flex;flex-wrap:wrap;gap:16px;font-size:14px;color:var(--muted);margin:4px 0 16px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:6px}
+.summary{display:flex;flex-wrap:wrap;gap:32px;margin:0 0 20px}
+.summary div{font-size:14px;color:var(--muted)}
+.summary b{display:block;font-family:var(--display);font-size:32px;color:var(--ink)}
+
+/* Recipe editor */
+.editor{display:grid;grid-template-columns:240px minmax(0,1fr) 280px;gap:20px;align-items:start}
+.list{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:8px;display:grid;gap:2px}
+.list button{border:0;background:none;text-align:left;padding:9px 12px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;gap:8px}
+.list button[aria-current="true"]{background:var(--leaf);color:var(--herb);font-weight:700}
+.list small{color:var(--muted)}
+.fields{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:12px;margin-bottom:16px}
+label.f{display:grid;gap:4px;font-size:13px;color:var(--muted);font-weight:700}
+.ticket{position:sticky;top:16px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
+.ticket h3{font-size:22px;margin-bottom:4px}
+.ticket .big{font-family:var(--display);font-size:56px;font-weight:800;line-height:1;margin:14px 0 2px;letter-spacing:-.03em}
+.ticket .big.over{color:var(--tomato)}
+.ticket dl{display:grid;grid-template-columns:1fr auto;gap:8px 12px;margin:18px 0 0;font-size:15px}
+.ticket dt{color:var(--muted)} .ticket dd{margin:0;text-align:right;font-weight:700}
+.ticket .hint{font-size:14px;color:var(--muted);margin-top:14px}
+.ticket .split{margin-top:14px}
+.addrow{margin-top:12px}
+
+.tools{display:flex;flex-wrap:wrap;gap:8px;margin-top:28px;padding-top:20px;border-top:1px solid var(--line)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:999px;font-weight:700;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.on{opacity:1}
+footer{max-width:1180px;margin:0 auto;padding:8px 24px 40px;color:var(--muted);font-size:13px}
+
+@media (max-width:980px){
+  .editor{grid-template-columns:1fr}
+  .list{display:flex;overflow-x:auto}
+  .list button{flex:0 0 auto}
+  .ticket{position:static}
+}
+@media (max-width:640px){
+  .top,main{padding-left:16px;padding-right:16px} nav.tabs{padding:0 8px}
+  .dish{grid-template-columns:1fr auto}
+  .dish .split{grid-column:1/-1;grid-row:2}
+  .fields{grid-template-columns:1fr 1fr}
+  .fields label:first-child{grid-column:1/-1}
+  .head h2{font-size:26px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media print{
+  .top,nav.tabs,.tools,.list,.icon,.addrow,footer,.btn{display:none!important}
+  body{background:#fff;color:#000} .editor{grid-template-columns:1fr} .in{border:0;background:none;padding:0}
+  .view{display:none!important} .view.on{display:block!important}
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><h1>Plate Cost</h1><span>by Daniela Herrera</span></div>
+  <label class="target">Target food cost <input id="target" class="in num" type="number" min="1" max="99" step="0.5"> %</label>
+  <label class="target">Currency <input id="currency" class="in" style="width:56px" maxlength="4"></label>
+</header>
+<nav class="tabs" role="tablist" aria-label="Sections">
+  <button role="tab" data-tab="menu" aria-selected="true">Menu</button>
+  <button role="tab" data-tab="recipes" aria-selected="false">Recipes</button>
+  <button role="tab" data-tab="ingredients" aria-selected="false">Ingredients</button>
+</nav>
+
+<main>
+  <section class="view on" id="v-menu" role="tabpanel">
+    <div class="head">
+      <div><h2>Where each menu dollar goes</h2><p>Every dish shows its plate cost against its menu price. The gold line is your target food cost.</p></div>
+      <button class="btn" id="newDish">Add dish</button>
+    </div>
+    <div class="summary" id="summary"></div>
+    <div class="legend"><span><i style="background:var(--costbar)"></i>Plate cost</span><span><i style="background:var(--herb)"></i>Plate cost above target</span><span><i style="background:var(--leaf)"></i>Gross profit</span><span><i style="background:var(--mustard)"></i>Target</span></div>
+    <div class="board" id="board"></div>
+    <div class="tools">
+      <button class="btn ghost small" id="csv">Download menu report (CSV)</button>
+      <button class="btn ghost small" id="backup">Download backup</button>
+      <label class="btn ghost small" style="cursor:pointer">Restore backup<input type="file" id="restore" accept=".json" hidden></label>
+      <button class="btn ghost small" id="sample">Load example menu</button>
+      <button class="btn ghost small" id="wipe">Start empty</button>
+    </div>
+  </section>
+
+  <section class="view" id="v-recipes" role="tabpanel">
+    <div class="head">
+      <div><h2>Recipes</h2><p>List what goes into one batch. Quantities use each ingredient's recipe unit.</p></div>
+      <div style="display:flex;gap:8px"><button class="btn ghost" id="printDish">Print recipe card</button><button class="btn" id="newDish2">Add dish</button></div>
+    </div>
+    <div class="editor" id="editor"></div>
+  </section>
+
+  <section class="view" id="v-ingredients" role="tabpanel">
+    <div class="head">
+      <div><h2>Ingredients</h2><p>Enter what you pay and how you buy it. Unit conversions and trim loss (yield) are handled for you.</p></div>
+      <button class="btn" id="newIng">Add ingredient</button>
+    </div>
+    <div class="tablewrap"><table id="ingTable"></table></div>
+  </section>
+</main>
+<footer>Your data stays in this browser. Download a backup to move it to another device.<br>Designed by Daniela Herrera — custom recipe books and menu costing for restaurants · <a href="mailto:hfmarketingco@gmail.com">hfmarketingco@gmail.com</a> · <a href="https://instagram.com/danielaherref" target="_blank" rel="noopener">@danielaherref</a></footer>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+const UNITS = {g:["weight",1],kg:["weight",1000],oz:["weight",28.3495],lb:["weight",453.592],
+  ml:["volume",1],L:["volume",1000],tsp:["volume",4.92892],tbsp:["volume",14.7868],"fl oz":["volume",29.5735],
+  cup:["volume",236.588],qt:["volume",946.353],gal:["volume",3785.41],each:["count",1],dozen:["count",12]};
+const KEY = "platecost.v1";
+const uid = () => Math.random().toString(36).slice(2, 9);
+
+function sample(){
+  const I = (name,category,price,size,pu,ru,yld) => ({id:uid(),name,category,price,size,pu,ru,yield:yld});
+  const ing = [I("Chicken thigh, boneless","Protein",95,40,"lb","oz",92),I("Corn tortillas","Dry goods",6.5,80,"each","each",100),
+    I("White onion","Produce",28,50,"lb","oz",90),I("Cilantro (bunch)","Produce",24,60,"each","each",100),
+    I("Limes","Produce",38,200,"each","each",100),I("Avocados","Produce",52,48,"each","each",70),
+    I("Cotija cheese","Dairy",27,5,"lb","oz",100),I("Jasmine rice","Dry goods",22,25,"lb","oz",100),
+    I("Olive oil","Dry goods",32,1,"gal","tbsp",100),I("Kosher salt","Dry goods",3.5,3,"lb","g",100),
+    I("Garlic, peeled","Produce",18,5,"lb","oz",95),I("Tortilla chips","Dry goods",19,10,"lb","oz",100)];
+  const by = n => ing.find(i=>i.name.startsWith(n)).id;
+  const D = (name,category,portions,price,lines) => ({id:uid(),name,category,portions,price,lines:lines.map(([n,q])=>({ingId:by(n),qty:q}))});
+  return {settings:{name:"",target:30,currency:"$"}, ingredients:ing, dishes:[
+    D("Chicken tacos (3)","Mains",10,9,[["Chicken",60],["Corn",30],["White",6],["Cilantro",1],["Limes",5],["Cotija",10],["Avocados",5],["Olive",2],["Kosher",12]]),
+    D("Guacamole & chips","Starters",8,6.5,[["Avocados",8],["Limes",3],["White",3],["Cilantro",0.5],["Kosher",8],["Tortilla",32]]),
+    D("Cilantro lime rice","Sides",12,5,[["Jasmine",32],["Cilantro",1],["Limes",3],["Olive",2],["Garlic",1],["Kosher",10]])]};
+}
+
+let S;
+try { S = JSON.parse(localStorage.getItem(KEY)); } catch(e) { S = null; }
+if (!S || !S.ingredients) S = sample();
+let current = S.dishes[0]?.id || null;
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {} };
+
+/* ---------- math ---------- */
+const n = v => { const x = parseFloat(v); return isFinite(x) ? x : null; };
+function unitCost(i){
+  const p=n(i.price), s=n(i.size), y=n(i.yield)??100;
+  if(p==null||!s||!UNITS[i.pu]||!UNITS[i.ru]) return {v:null};
+  if(UNITS[i.pu][0]!==UNITS[i.ru][0]) return {v:null, err:`Can't convert ${i.pu} to ${i.ru}`};
+  if(!y) return {v:null, err:"Yield can't be 0%"};
+  return {v: p / (s*UNITS[i.pu][1]/UNITS[i.ru][1]) / (y/100)};
+}
+const ingById = id => S.ingredients.find(i=>i.id===id);
+function dishCalc(d){
+  let batch=0, missing=0;
+  for(const l of d.lines){ const i=ingById(l.ingId); const c=i?unitCost(i).v:null; const q=n(l.qty);
+    if(c==null||q==null){ if(l.ingId) missing++; continue; } batch+=c*q; }
+  const por=n(d.portions), price=n(d.price), t=n(S.settings.target)/100;
+  const per = por ? batch/por : null;
+  const fc = per!=null && price ? per/price : null;
+  return {batch, per, fc, price, sugg: per!=null && t ? per/t : null, profit: per!=null&&price!=null ? price-per : null, missing, over: fc!=null && fc>t};
+}
+const cur = S => S.settings.currency || "$";
+const money = (v,d=2) => v==null||!isFinite(v) ? "–" : cur(S)+v.toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d});
+const pct = v => v==null||!isFinite(v) ? "–" : (v*100).toFixed(1)+"%";
+const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ---------- toast ---------- */
+let tt; function toast(m){ const t=document.getElementById("toast"); t.textContent=m; t.classList.add("on"); clearTimeout(tt); tt=setTimeout(()=>t.classList.remove("on"),1800); }
+
+/* ---------- header ---------- */
+const $ = id => document.getElementById(id);
+function renderHeader(){ $("target").value=S.settings.target; $("currency").value=S.settings.currency; }
+$("target").addEventListener("input",e=>{S.settings.target=e.target.value; save(); refresh();});
+$("currency").addEventListener("input",e=>{S.settings.currency=e.target.value; save(); refresh();});
+
+/* ---------- tabs ---------- */
+let tab="menu";
+document.querySelectorAll("nav.tabs button").forEach(b=>b.addEventListener("click",()=>show(b.dataset.tab)));
+function show(t){ tab=t;
+  document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===t));
+  document.querySelectorAll(".view").forEach(v=>v.classList.toggle("on",v.id==="v-"+t));
+  render(); }
+function render(){ renderHeader(); if(tab==="menu") renderMenu(); if(tab==="recipes") renderRecipes(); if(tab==="ingredients") renderIngredients(); }
+function refresh(){ // update computed values without rebuilding inputs
+  if(tab==="menu") renderMenu(); if(tab==="recipes") updateTicket(); if(tab==="ingredients") updateIngCalc(); }
+
+/* ---------- menu ---------- */
+function splitBar(c){
+  const t=n(S.settings.target)/100; const w=c.fc==null?0:Math.min(c.fc,1)*100;
+  return `<div class="split ${c.over?"over":""}" role="img" aria-label="Plate cost ${pct(c.fc)} of menu price">
+    <div class="cost" style="width:${w}%">${w>14?pct(c.fc):""}</div>
+    <div class="profit">${c.profit!=null?money(c.profit)+" profit":""}</div>
+    ${t?`<div class="mark" style="left:calc(${Math.min(t,1)*100}% - 1px)"></div>`:""}</div>`;
+}
+function renderMenu(){
+  const calcs=S.dishes.map(d=>[d,dishCalc(d)]);
+  const valid=calcs.filter(([,c])=>c.fc!=null);
+  const avg=valid.length?valid.reduce((a,[,c])=>a+c.fc,0)/valid.length:null;
+  const over=valid.filter(([,c])=>c.over).length;
+  $("summary").innerHTML = `<div><b>${S.dishes.length}</b>dishes</div><div><b>${pct(avg)}</b>average food cost</div><div><b style="color:${over?"var(--tomato)":"var(--basil)"}">${over}</b>above target</div>`;
+  $("board").innerHTML = calcs.length ? calcs.map(([d,c])=>`
+    <button class="dish" data-id="${d.id}">
+      <div><h3>${esc(d.name)||"Untitled dish"}</h3><div class="cat">${esc(d.category)}${d.category?" — ":""}menu price ${money(c.price)}</div></div>
+      ${splitBar(c)}
+      <div class="nums"><b class="${c.over?"over":""}">${money(c.per)}</b>plate cost${c.over&&c.sugg?`<br>charge ${money(c.sugg)} to hit target`:""}</div>
+    </button>`).join("") : `<div class="empty">No dishes yet. Add your first dish to see its plate cost.</div>`;
+  document.querySelectorAll(".dish").forEach(b=>b.addEventListener("click",()=>{current=b.dataset.id; show("recipes");}));
+}
+
+/* ---------- recipes ---------- */
+function newDish(){ const d={id:uid(),name:"",category:"",portions:1,price:"",lines:[{ingId:"",qty:""}]}; S.dishes.push(d); current=d.id; save(); show("recipes"); setTimeout(()=>document.querySelector('[data-dk="name"]')?.focus(),0); }
+$("newDish").onclick=newDish; $("newDish2").onclick=newDish;
+$("printDish").onclick=()=>window.print();
+
+function renderRecipes(){
+  const ed=$("editor");
+  if(!S.dishes.length){ ed.innerHTML=`<div class="empty" style="grid-column:1/-1">No dishes yet. Use "Add dish" to start a recipe.</div>`; return; }
+  if(!ingById && false) return;
+  let d=S.dishes.find(x=>x.id===current); if(!d){ d=S.dishes[0]; current=d.id; }
+  const opts = id => `<option value="">Choose ingredient…</option>`+[...S.ingredients].sort((a,b)=>a.name.localeCompare(b.name))
+      .map(i=>`<option value="${i.id}" ${i.id===id?"selected":""}>${esc(i.name)||"(unnamed)"}</option>`).join("");
+  ed.innerHTML = `
+    <div class="list" aria-label="Dishes">${S.dishes.map(x=>`<button data-id="${x.id}" aria-current="${x.id===d.id}">${esc(x.name)||"Untitled dish"}<small>${esc(x.category)}</small></button>`).join("")}</div>
+    <div>
+      <div class="fields">
+        <label class="f">Dish name<input class="in" data-dk="name" value="${esc(d.name)}" placeholder="e.g. Chicken tacos (3)"></label>
+        <label class="f">Category<input class="in" data-dk="category" value="${esc(d.category)}" placeholder="Mains"></label>
+        <label class="f">Portions per batch<input class="in num" type="number" min="0" step="any" data-dk="portions" value="${esc(d.portions)}"></label>
+        <label class="f">Menu price<input class="in num" type="number" min="0" step="0.01" data-dk="price" value="${esc(d.price)}"></label>
+      </div>
+      <div class="tablewrap"><table style="min-width:560px">
+        <thead><tr><th>Ingredient</th><th class="r" style="width:110px">Qty per batch</th><th style="width:70px">Unit</th><th class="r" style="width:110px">Line cost</th><th style="width:40px"></th></tr></thead>
+        <tbody>${d.lines.map((l,k)=>`<tr>
+          <td><select class="in" data-lk="${k}" data-f="ingId" aria-label="Ingredient">${opts(l.ingId)}</select></td>
+          <td><input class="in num" type="number" min="0" step="any" data-lk="${k}" data-f="qty" value="${esc(l.qty)}" aria-label="Quantity"></td>
+          <td data-unit="${k}">${esc(ingById(l.ingId)?.ru||"")}</td>
+          <td class="r calc" data-line="${k}"></td>
+          <td><button class="icon" data-del="${k}" aria-label="Remove line">×</button></td></tr>`).join("")}</tbody>
+      </table></div>
+      <div class="addrow" style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <button class="btn ghost small" id="addLine">Add ingredient line</button>
+        <button class="btn ghost small" id="delDish" style="border-color:var(--tomato);color:var(--tomato)">Delete dish</button>
+      </div>
+    </div>
+    <aside class="ticket" id="ticket" aria-live="polite"></aside>`;
+  ed.querySelectorAll(".list button").forEach(b=>b.onclick=()=>{current=b.dataset.id; renderRecipes();});
+  ed.querySelectorAll("[data-dk]").forEach(inp=>inp.addEventListener("input",()=>{ d[inp.dataset.dk]=inp.value; save(); updateTicket();
+    if(inp.dataset.dk==="name"||inp.dataset.dk==="category"){ const b=ed.querySelector(`.list button[data-id="${d.id}"]`); if(b) b.innerHTML=`${esc(d.name)||"Untitled dish"}<small>${esc(d.category)}</small>`; } }));
+  ed.querySelectorAll("[data-lk]").forEach(inp=>inp.addEventListener(inp.tagName==="SELECT"?"change":"input",()=>{
+    const l=d.lines[+inp.dataset.lk]; l[inp.dataset.f]=inp.value; save();
+    if(inp.dataset.f==="ingId") ed.querySelector(`[data-unit="${inp.dataset.lk}"]`).textContent=ingById(l.ingId)?.ru||"";
+    updateTicket(); }));
+  ed.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{ d.lines.splice(+b.dataset.del,1); save(); renderRecipes(); });
+  $("addLine").onclick=()=>{ d.lines.push({ingId:"",qty:""}); save(); renderRecipes(); ed.querySelectorAll("select[data-lk]")[d.lines.length-1]?.focus(); };
+  $("delDish").onclick=()=>{ if(!confirmInline($("delDish"),"Click again to delete")) return; S.dishes=S.dishes.filter(x=>x.id!==d.id); current=S.dishes[0]?.id; save(); toast("Dish deleted"); renderRecipes(); };
+  updateTicket();
+}
+function confirmInline(btn,msg){ if(btn.dataset.armed){ return true; } btn.dataset.armed=1; const o=btn.textContent; btn.textContent=msg; setTimeout(()=>{btn.textContent=o; delete btn.dataset.armed;},2500); return false; }
+function updateTicket(){
+  const d=S.dishes.find(x=>x.id===current); const tk=$("ticket"); if(!d||!tk) return;
+  const c=dishCalc(d);
+  d.lines.forEach((l,k)=>{ const cell=document.querySelector(`[data-line="${k}"]`); if(!cell) return;
+    const i=ingById(l.ingId); const u=i?unitCost(i):{v:null}; const q=n(l.qty);
+    cell.innerHTML = u.err ? `<span class="flag bad" title="${esc(u.err)}">Check units</span>` : (u.v!=null&&q!=null ? money(u.v*q) : "–"); });
+  const t=n(S.settings.target);
+  tk.innerHTML = `<h3>${esc(d.name)||"Untitled dish"}</h3><div style="color:var(--muted);font-size:14px">Cost per plate</div>
+    <div class="big ${c.over?"over":""}">${money(c.per)}</div>
+    <div>${c.fc!=null?`<span class="flag ${c.over?"bad":"good"}">${pct(c.fc)} food cost</span>`:`<span style="color:var(--muted);font-size:14px">Add a menu price to see food cost %</span>`}</div>
+    ${c.fc!=null?splitBar(c):""}
+    <dl><dt>Batch cost</dt><dd>${money(c.batch)}</dd><dt>Menu price</dt><dd>${money(c.price)}</dd>
+    <dt>Profit per plate</dt><dd>${money(c.profit)}</dd><dt>Price for ${t||"–"}% food cost</dt><dd>${money(c.sugg)}</dd></dl>
+    ${c.missing?`<p class="hint">${c.missing} line${c.missing>1?"s are":" is"} missing a price or quantity and isn't counted yet.</p>`:""}
+    ${c.over&&c.sugg?`<p class="hint">To reach your target, raise the price to ${money(c.sugg)} or trim ${money(c.per-c.price*t/100)} of cost per plate.</p>`:""}`;
+}
+
+/* ---------- ingredients ---------- */
+const unitOpts = sel => Object.keys(UNITS).map(u=>`<option ${u===sel?"selected":""}>${u}</option>`).join("");
+function renderIngredients(){
+  const tb=$("ingTable");
+  tb.innerHTML = `<thead><tr><th>Ingredient</th><th>Category</th><th class="r">Pack price</th><th class="r">Pack size</th><th>Bought in</th><th>Used in recipes as</th><th class="r">Yield %</th><th class="r">Cost per recipe unit</th><th></th></tr></thead>
+  <tbody>${S.ingredients.length?S.ingredients.map((i,k)=>`<tr>
+    <td><input class="in" data-ik="${k}" data-f="name" value="${esc(i.name)}" placeholder="e.g. Limes" style="min-width:170px"></td>
+    <td><input class="in" data-ik="${k}" data-f="category" value="${esc(i.category)}" style="min-width:100px"></td>
+    <td><input class="in num" type="number" min="0" step="0.01" data-ik="${k}" data-f="price" value="${esc(i.price)}" style="width:90px"></td>
+    <td><input class="in num" type="number" min="0" step="any" data-ik="${k}" data-f="size" value="${esc(i.size)}" style="width:80px"></td>
+    <td><select class="in" data-ik="${k}" data-f="pu" style="width:80px">${unitOpts(i.pu)}</select></td>
+    <td><select class="in" data-ik="${k}" data-f="ru" style="width:80px">${unitOpts(i.ru)}</select></td>
+    <td><input class="in num" type="number" min="1" max="100" step="any" data-ik="${k}" data-f="yield" value="${esc(i.yield)}" style="width:70px"></td>
+    <td class="r calc" data-ic="${k}"></td>
+    <td><button class="icon" data-idel="${k}" aria-label="Delete ingredient">×</button></td></tr>`).join("")
+    :`<tr><td colspan="9" class="empty">No ingredients yet. Add what you buy, starting with your most expensive items.</td></tr>`}</tbody>`;
+  tb.querySelectorAll("[data-ik]").forEach(inp=>inp.addEventListener(inp.tagName==="SELECT"?"change":"input",()=>{
+    S.ingredients[+inp.dataset.ik][inp.dataset.f]=inp.value; save(); updateIngCalc(); }));
+  tb.querySelectorAll("[data-idel]").forEach(b=>b.onclick=()=>{
+    const i=S.ingredients[+b.dataset.idel]; const used=S.dishes.filter(d=>d.lines.some(l=>l.ingId===i.id)).length;
+    if(used && !confirmInline(b,"Used in "+used+" — click again")) return;
+    S.ingredients.splice(+b.dataset.idel,1); S.dishes.forEach(d=>d.lines=d.lines.filter(l=>l.ingId!==i.id)); save(); toast("Ingredient deleted"); renderIngredients(); });
+  updateIngCalc();
+}
+function updateIngCalc(){
+  S.ingredients.forEach((i,k)=>{ const c=document.querySelector(`[data-ic="${k}"]`); if(!c) return; const u=unitCost(i);
+    c.innerHTML = u.err?`<span class="flag bad">${esc(u.err)}</span>`:(u.v!=null?`${money(u.v,u.v<1?4:2)} <span style="color:var(--muted);font-weight:400">/ ${esc(i.ru)}</span>`:"–"); });
+}
+$("newIng").onclick=()=>{ S.ingredients.push({id:uid(),name:"",category:"",price:"",size:"",pu:"lb",ru:"oz",yield:100}); save(); renderIngredients();
+  const ins=document.querySelectorAll('[data-f="name"]'); ins[ins.length-1]?.focus(); };
+
+/* ---------- data tools ---------- */
+function download(name,text,type){ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([text],{type})); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
+$("backup").onclick=()=>{ download("plate-cost-backup.json",JSON.stringify(S,null,2),"application/json"); toast("Backup downloaded"); };
+$("restore").onchange=e=>{ const f=e.target.files[0]; if(!f) return; f.text().then(t=>{ try{ const d=JSON.parse(t); if(!d.ingredients||!d.dishes) throw 0; S=d; current=S.dishes[0]?.id; save(); render(); toast("Backup restored"); }catch(_){ toast("That file isn't a Plate Cost backup"); } }); e.target.value=""; };
+$("sample").onclick=e=>{ if(!confirmInline(e.target,"Replaces your data — click again")) return; S=sample(); current=S.dishes[0].id; save(); render(); toast("Example menu loaded"); };
+$("wipe").onclick=e=>{ if(!confirmInline(e.target,"Erases everything — click again")) return; S={settings:{...S.settings},ingredients:[],dishes:[]}; current=null; save(); render(); toast("Started empty"); };
+$("csv").onclick=()=>{
+  const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
+  const rows=[["Dish","Category","Portions","Menu price","Batch cost","Cost per plate","Food cost %","Suggested price","Profit per plate"]]
+    .concat(S.dishes.map(d=>{const c=dishCalc(d); const f=v=>v==null?"":v.toFixed(2); return [d.name,d.category,d.portions,f(c.price),f(c.batch),f(c.per),c.fc==null?"":(c.fc*100).toFixed(1),f(c.sugg),f(c.profit)];}));
+  download("menu-report.csv",rows.map(r=>r.map(q).join(",")).join("\n"),"text/csv"); toast("Menu report downloaded"); };
+
+render();
+</script>
+</body>
+</html>
